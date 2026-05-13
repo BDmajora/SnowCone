@@ -1,0 +1,43 @@
+#!/sbin/openrc-run
+# snowcone — OpenRC init script
+#
+# Lifecycle:
+#   - Starts at sysinit (the earliest OpenRC runlevel), before localmount,
+#     so it appears on screen the instant the kernel finishes its quiet
+#     boot.
+#   - Continues running through the default runlevel.
+#   - Stopped explicitly by the display manager (or whatever brings up
+#     graphics) by sending SIGTERM via `rc-service snowcone stop`.
+#   - Also exits on SIGUSR1 (legacy Plymouth-style "quit" signal) for
+#     compatibility with services that already speak that protocol.
+#
+# Design notes:
+#   - We background the binary with start-stop-daemon and let it own
+#     /dev/dri/card0 until something else needs it.
+#   - When the compositor grabs DRM master, snowcone's next ioctls
+#     start failing — but we don't rely on that for correctness; the
+#     compositor service should stop us explicitly.
+
+description="YetiOS boot splash"
+
+command=/usr/sbin/snowcone
+command_background=true
+pidfile=/run/snowcone.pid
+
+# 'boot' runlevel parents: started after the kernel ring buffer is
+# suppressed but before any heavy services. This keeps the splash on
+# screen for the duration of the boot.
+depend() {
+    before localmount
+    before dmesg
+    keyword -prefix -systemd-nspawn -lxc -openvz -vserver
+}
+
+start_pre() {
+    # Only meaningful if there's a DRM device. In containers there isn't.
+    if [ ! -c /dev/dri/card0 ] && [ ! -c /dev/dri/card1 ]; then
+        ewarn "no DRM device — skipping splash"
+        return 1
+    fi
+    return 0
+}
