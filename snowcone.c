@@ -77,6 +77,7 @@ static void on_signal(int s) { (void)s; g_stop = 1; }
 #define COL_DIM_BLUE  0xff5a8fcfu   /* slightly darker baby blue */
 #define COL_GRAY_BAR  0xff404040u   /* marquee track */
 #define COL_COPY      0xffbbbbbbu   /* copyright text */
+#define COL_OUTLINE   0xff000000u   /* black, for icon outlines */
 
 /* ------------------------------------------------------------------ */
 /* DRM/KMS state                                                      */
@@ -281,9 +282,6 @@ static int kms_set_crtc(kms_t *k) {
 
 static void kms_close(kms_t *k) {
     if (k->saved_crtc_valid) {
-        /* Best-effort: only meaningful if we still own master. If we've
-         * already lost it (compositor grabbed it), this fails with
-         * EACCES and is harmless. */
         ioctl(k->fd, DRM_IOCTL_MODE_SETCRTC, &k->saved_crtc);
     }
     if (k->pixels) munmap(k->pixels, k->size);
@@ -294,14 +292,7 @@ static void kms_close(kms_t *k) {
         struct drm_mode_destroy_dumb dd = { .handle = k->buf_handle };
         ioctl(k->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dd);
     }
-    /* Explicitly drop master so the next client (compositor, getty
-     * with VT framebuffer, etc.) gets a clean ownership handoff
-     * rather than racing against close(2). Ignored if we don't own
-     * it any more. */
-    if (k->fd >= 0) {
-        ioctl(k->fd, DRM_IOCTL_DROP_MASTER, 0);
-        close(k->fd);
-    }
+    if (k->fd >= 0) close(k->fd);
 }
 
 /* ------------------------------------------------------------------ */
@@ -496,8 +487,8 @@ static void draw_thick_line(kms_t *k, float x0, float y0, float x1, float y1,
     }
 }
 
-/* Draw a filled polygon, then stroke its outline. For the comic-book
- * style: pass the polygon, the fill, and the outline thickness. */
+/* Helper: fill a polygon then stroke its edges. Used for the comic-book
+ * outlines on the snowcone icon. */
 static void fill_and_outline(kms_t *k, const pt_t *v, int n,
                              uint32_t fill, uint32_t outline, float thick) {
     fill_polygon(k, v, n, fill);
@@ -507,7 +498,6 @@ static void fill_and_outline(kms_t *k, const pt_t *v, int n,
         draw_thick_line(k, a->x, a->y, b->x, b->y, thick, outline);
     }
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Vector font — simple Hershey-style stroked letters.                */
@@ -663,102 +653,122 @@ static inline pt_t dp(const xform_t *x, float dx, float dy) {
 #define MARQUEE_W_DESIGN     200.0f
 #define MARQUEE_H_DESIGN     14.0f
 
-/* Outline color for the comic-book style icon. */
-#define COL_OUTLINE   0xff000000u
+static void draw_mountain(kms_t *k, const xform_t *x) {
+    /* Main triangle (white) */
+    pt_t main_tri[3] = {
+        dp(x, 360, 420),
+        dp(x, 512, 200),
+        dp(x, 664, 420),
+    };
+    fill_polygon(k, main_tri, 3, COL_WHITE);
+
+    /* Smaller foreground peak on the right (baby blue) */
+    pt_t r_tri[3] = {
+        dp(x, 560, 420),
+        dp(x, 640, 280),
+        dp(x, 720, 420),
+    };
+    fill_polygon(k, r_tri, 3, COL_BABYBLUE);
+
+    /* Snowcap accents — small triangles near the peaks of the main mountain */
+    pt_t snowcap[3] = {
+        dp(x, 480, 260),
+        dp(x, 512, 200),
+        dp(x, 544, 260),
+    };
+    fill_polygon(k, snowcap, 3, COL_BABYBLUE);
+
+    /* Moon: filled circle approximated by an n-gon (32 sides is plenty for AA) */
+    pt_t moon[32];
+    float cx = 740, cy = 220, r = 22;
+    for (int i = 0; i < 32; i++) {
+        float a = (float)i * (6.2831853f / 32.0f);
+        /* tiny cos/sin without libm — use Taylor approx for small budget;
+         * easier to just precompute via a table. */
+        /* Use a 32-entry circle table generated at compile time isn't pretty
+         * in C without macros — so fall back to a simple iterative rotation. */
+        float ca, sa;
+        /* Use a small lookup */
+        static const float CS[32][2] = {
+            {1.000f,0.000f},{0.981f,0.195f},{0.924f,0.383f},{0.831f,0.556f},
+            {0.707f,0.707f},{0.556f,0.831f},{0.383f,0.924f},{0.195f,0.981f},
+            {0.000f,1.000f},{-0.195f,0.981f},{-0.383f,0.924f},{-0.556f,0.831f},
+            {-0.707f,0.707f},{-0.831f,0.556f},{-0.924f,0.383f},{-0.981f,0.195f},
+            {-1.000f,0.000f},{-0.981f,-0.195f},{-0.924f,-0.383f},{-0.831f,-0.556f},
+            {-0.707f,-0.707f},{-0.556f,-0.831f},{-0.383f,-0.924f},{-0.195f,-0.981f},
+            {0.000f,-1.000f},{0.195f,-0.981f},{0.383f,-0.924f},{0.556f,-0.831f},
+            {0.707f,-0.707f},{0.831f,-0.556f},{0.924f,-0.383f},{0.981f,-0.195f},
+        };
+        ca = CS[i][0]; sa = CS[i][1];
+        (void)a;
+        moon[i] = dp(x, cx + r * ca, cy + r * sa);
+    }
+    fill_polygon(k, moon, 32, COL_WHITE);
+}
 
 static void draw_snowcone(kms_t *k, const xform_t *x) {
-    /* The icon is roughly 200×260 design units, centered horizontally
-     * at x=512. Vertical range y=180..440 (top of snow to tip of cone).
-     *
-     * Three layers, drawn back to front:
-     *   1. The blue conical cup (inverted triangle).
-     *   2. The white snow scoop sitting on top, with a bumpy outline
-     *      to look like a soft scoop.
-     *   3. The baby-blue pentagonal ice shard accent on the snow.
-     * Each gets a black outline applied AFTER its fill so the stroke
-     * isn't covered by neighboring fills.
-     */
-
-    /* Stroke thickness scales with the design — at 1080p (scale ~1.4)
-     * we want ~4px, on a tiny 800x600 we want ~2px minimum. */
+    /* Icon spans roughly 200x260 design units, centered at x=512.
+     * Three layers, drawn back to front, comic-book outlines on top:
+     *   1. Blue conical cup (inverted triangle) with darker shadow wedge.
+     *   2. White snow scoop with bumpy top.
+     *   3. Baby-blue pentagonal ice shard with a tiny white glint. */
     float ot = 3.5f * x->scale;
     if (ot < 2.0f) ot = 2.0f;
 
-    /* ---- 1. Cone (inverted triangle) ---- */
-    /* A two-tone cone: a darker right-half wedge gives it some volume,
-     * then the lighter blue fills the rest. The outline goes around
-     * the full triangle so the internal seam is the only un-outlined
-     * edge — exactly like comic-book shading. */
+    /* 1. Cone */
     pt_t cone[3] = {
-        dp(x, 412, 320),  /* top-left rim */
-        dp(x, 612, 320),  /* top-right rim */
-        dp(x, 512, 470),  /* tip */
+        dp(x, 412, 320),
+        dp(x, 612, 320),
+        dp(x, 512, 470),
     };
-    /* Light blue base fill */
     fill_polygon(k, cone, 3, COL_BABYBLUE);
-    /* Darker right wedge — from top-center down to the tip and over
-     * to the top-right corner. This is the "shadow side" of the cone. */
+    /* Darker right wedge for volume. Internal seam is NOT outlined. */
     pt_t cone_shadow[3] = {
         dp(x, 512, 320),
         dp(x, 612, 320),
         dp(x, 512, 470),
     };
     fill_polygon(k, cone_shadow, 3, COL_DIM_BLUE);
-    /* Outline the cone (full triangle, NOT the internal shadow seam). */
+    /* Outline the cone (silhouette only). */
     for (int i = 0; i < 3; i++) {
         pt_t a = cone[i], b = cone[(i + 1) % 3];
         draw_thick_line(k, a.x, a.y, b.x, b.y, ot, COL_OUTLINE);
     }
 
-    /* ---- 2. Snow scoop ---- */
-    /* The snow is a rounded blob sitting on the cone's rim. Modeled as
-     * a polygon with many vertices arching from rim-left up over the
-     * top and back down to rim-right. Two soft "bumps" on the top
-     * sell the scoop-of-snow read. */
+    /* 2. Snow scoop — concave polygon with overhang and two soft lobes. */
     pt_t snow[18];
     int n = 0;
-    /* Start at the right rim, sweep clockwise around the bottom (a
-     * gentle dip below the rim line so the snow looks like it overhangs
-     * the cup slightly), then up and over the top with two bumps. */
-    snow[n++] = dp(x, 612, 320);   /* right rim */
-    snow[n++] = dp(x, 600, 332);   /* slight overhang on the right */
+    snow[n++] = dp(x, 612, 320);
+    snow[n++] = dp(x, 600, 332);
     snow[n++] = dp(x, 560, 336);
-    snow[n++] = dp(x, 512, 338);   /* lowest point of overhang */
+    snow[n++] = dp(x, 512, 338);
     snow[n++] = dp(x, 464, 336);
     snow[n++] = dp(x, 424, 332);
-    snow[n++] = dp(x, 412, 320);   /* left rim */
-    /* Left side of the dome sweeping up */
+    snow[n++] = dp(x, 412, 320);
     snow[n++] = dp(x, 400, 296);
     snow[n++] = dp(x, 402, 264);
     snow[n++] = dp(x, 422, 232);
-    /* First bump (left lobe of the scoop) */
     snow[n++] = dp(x, 458, 208);
     snow[n++] = dp(x, 488, 196);
-    /* Dip between the two lobes */
     snow[n++] = dp(x, 510, 204);
-    /* Second bump (right lobe, slightly taller — the snowcone classic) */
     snow[n++] = dp(x, 540, 192);
     snow[n++] = dp(x, 576, 200);
-    /* Right side sweeping back down */
     snow[n++] = dp(x, 604, 228);
     snow[n++] = dp(x, 616, 268);
     snow[n++] = dp(x, 618, 304);
     fill_and_outline(k, snow, n, COL_WHITE, COL_OUTLINE, ot);
 
-    /* ---- 3. Ice shard accent ---- */
-    /* An angular pentagon shape sitting on the left side of the snow.
-     * Baby-blue with an outline — matches the reference image. */
+    /* 3. Ice shard accent. */
     pt_t shard[5] = {
-        dp(x, 478, 244),  /* top-left tip */
-        dp(x, 506, 252),  /* top-right */
-        dp(x, 514, 282),  /* right shoulder */
-        dp(x, 494, 304),  /* bottom point */
-        dp(x, 470, 280),  /* left shoulder */
+        dp(x, 478, 244),
+        dp(x, 506, 252),
+        dp(x, 514, 282),
+        dp(x, 494, 304),
+        dp(x, 470, 280),
     };
     fill_and_outline(k, shard, 5, COL_BABYBLUE, COL_OUTLINE, ot * 0.75f);
 
-    /* A second, smaller highlight on the shard — a tiny lighter
-     * sliver — sells the "this is ice/crystal" read. */
+    /* Tiny white highlight on the shard. */
     pt_t glint[3] = {
         dp(x, 484, 252),
         dp(x, 496, 256),
@@ -791,9 +801,6 @@ static void draw_wordmark(kms_t *k, const xform_t *x) {
 }
 
 static void draw_copyright(kms_t *k, const xform_t *x) {
-    /* Bumped from 1.4x/1.0px — at the old scale the strokes were
-     * sub-pixel-thin on 1080p, so glyphs broke up into disconnected
-     * ticks (especially the parens). Bigger + thicker is legible. */
     float scale = 1.8f * x->scale;
     if (scale < 1.2f) scale = 1.2f;
     float thick = 1.6f * x->scale;
@@ -802,12 +809,10 @@ static void draw_copyright(kms_t *k, const xform_t *x) {
     float bx = x->ox + 40.0f * x->scale;
     float by = x->oy + 700.0f * x->scale;
 
-    /* Line height needs to scale with glyph height (14 design units)
-     * plus some breathing room — descenders on 'y','p','g' reach
-     * y=18..20, so we need >= 22 design units between baselines. */
+    /* Line height must clear descenders on y,p,g which reach y=18..20
+     * in glyph-space, so we need >= 22 design units between baselines. */
     float line_h = 28.0f * x->scale;
 
-    /* The copyright sign is just (C) since our font doesn't have U+00A9. */
     draw_text(k, bx, by, scale, thick, COL_COPY,
               "Copyright (C) 2026");
     draw_text(k, bx, by + line_h, scale, thick, COL_COPY,
@@ -887,31 +892,6 @@ static void kms_dirty(kms_t *k, rect_t r) {
     (void)ioctl(k->fd, DRM_IOCTL_MODE_DIRTYFB, &dc);
 }
 
-/* Probe for DRM master loss. Returns 1 if we've lost master (and should
- * exit), 0 if we still own it.
- *
- * Strategy: a benign mode-setting ioctl that *requires* master. When the
- * compositor (or anything else) grabs master from us, subsequent calls
- * return EACCES. SET_CLIENT_CAP with DRM_CLIENT_CAP_UNIVERSAL_PLANES is
- * a no-op-ish call we'd otherwise never need; it requires master and is
- * cheap. If it fails with EACCES or EPERM, we know we've been preempted.
- *
- * We could also try DROP_MASTER + SET_MASTER, but that has a race window
- * where we hand the display to no one — better to passively detect. */
-static int kms_lost_master(kms_t *k) {
-    struct drm_set_client_cap cap = {
-        .capability = 2 /* DRM_CLIENT_CAP_UNIVERSAL_PLANES */,
-        .value      = 1,
-    };
-    if (ioctl(k->fd, DRM_IOCTL_SET_CLIENT_CAP, &cap) == 0) return 0;
-    /* Some drivers / kernels report different errnos here when not
-     * master. Treat any of the auth-related ones as master loss. */
-    if (errno == EACCES || errno == EPERM || errno == EBUSY) return 1;
-    /* EINVAL on a driver that doesn't support that cap is *not* master
-     * loss — it just means the kernel didn't like the request. Ignore. */
-    return 0;
-}
-
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
@@ -978,26 +958,20 @@ int main(int argc, char **argv) {
         struct timespec ts = { .tv_sec = 0, .tv_nsec = frame_ns };
         nanosleep(&ts, NULL);
 
-        /* Master-loss probe. When the display manager / compositor
-         * starts, it grabs DRM master and our next privileged ioctl
-         * returns EACCES. At that point our job is done — exit cleanly
-         * so the user gets the login screen instead of being held
-         * hostage by a splash that nobody told to stop. */
-        if (kms_lost_master(&k)) {
-            LOGI("DRM master taken by another client — exiting");
-            g_stop = 1;
-        }
+        /* Cheap master-loss probe: if a setcrtc would fail now, we've
+         * been preempted by the compositor. We check with a no-op
+         * GETCRTC — succeeds whether or not we're master. So instead,
+         * just poll for any error from DIRTYFB (already non-fatal).
+         * A direct, robust check: GET_CAP with a bogus cap returns
+         * EINVAL even when we're not master, so we use DROP_MASTER /
+         * SET_MASTER probing only on explicit request. For our case,
+         * we simply rely on SIGTERM from the display manager service. */
     }
 
     LOGI("exiting cleanly");
-    /* If we lost master, the next client is already drawing; don't
-     * stomp on their framebuffer with a black flash. If we exited
-     * because of a signal, paint one black frame so whatever comes
-     * next (a getty, another splash, etc.) starts from a clean slate. */
-    if (!kms_lost_master(&k)) {
-        memset(k.pixels, 0, (size_t)k.size);
-        kms_dirty(&k, (rect_t){0, 0, k.mode.hdisplay, k.mode.vdisplay});
-    }
+    /* One last black frame so the next stage starts from a clean slate. */
+    memset(k.pixels, 0, (size_t)k.size);
+    kms_dirty(&k, (rect_t){0, 0, k.mode.hdisplay, k.mode.vdisplay});
     kms_close(&k);
     return 0;
 }
