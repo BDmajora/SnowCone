@@ -238,31 +238,64 @@ static void draw_marquee_track(kms_t *k, const xform_t *x) {
     fill_rect(k, r.x, r.y, r.w, r.h, COL_BLACK);
 }
 
+/* Draw the slug at a given left-edge x, clipped horizontally to
+ * [clip_x0, clip_x1). Used by sc_draw_marquee_frame so a single slug
+ * can wrap seamlessly across the right→left boundary by being drawn
+ * twice (once at its real position, once shifted by the wrap period). */
+static void draw_slug(kms_t *k, int slug_x, int slug_w,
+                      int track_y, int track_h,
+                      int clip_x0, int clip_x1) {
+    int bands = 4;
+    int band_w = slug_w / (bands * 2);
+    if (band_w < 1) band_w = 1;
+
+    for (int i = 0; i < bands; i++) {
+        int cov = (i + 1) * 255 / bands;
+        for (int j = 0; j < band_w; j++) {
+            int xl = slug_x + i * band_w + j;
+            int xr = slug_x + slug_w - 1 - i * band_w - j;
+            for (int y = track_y; y < track_y + track_h; y++) {
+                if (xl >= clip_x0 && xl < clip_x1)
+                    blend_px(k, xl, y, COL_BABYBLUE, cov);
+                if (xr != xl && xr >= clip_x0 && xr < clip_x1)
+                    blend_px(k, xr, y, COL_BABYBLUE, cov);
+            }
+        }
+    }
+
+    int core_x = slug_x + bands * band_w;
+    int core_w = slug_w - 2 * bands * band_w;
+    if (core_w > 0) {
+        /* Clip the core rect to the track. */
+        int cx0 = core_x, cx1 = core_x + core_w;
+        if (cx0 < clip_x0) cx0 = clip_x0;
+        if (cx1 > clip_x1) cx1 = clip_x1;
+        if (cx1 > cx0)
+            fill_rect(k, cx0, track_y, cx1 - cx0, track_h, COL_BABYBLUE);
+    }
+}
+
 void sc_draw_marquee_frame(kms_t *k, const xform_t *x, float pos) {
     rect_t r = sc_marquee_rect(x);
     fill_rect(k, r.x, r.y, r.w, r.h, COL_BLACK);
 
     int slug_w = (int)(40.0f * x->scale);
     if (slug_w < 12) slug_w = 12;
-    int slug_x = r.x + (int)((float)(r.w - slug_w) * pos);
 
-    int bands = 4;
-    int band_w = slug_w / (bands * 2);
-    if (band_w < 1) band_w = 1;
-    for (int i = 0; i < bands; i++) {
-        int cov = (i + 1) * 255 / bands;
-        for (int j = 0; j < band_w; j++) {
-            int xl = slug_x + i * band_w + j;
-            int xr = slug_x + slug_w - 1 - i * band_w - j;
-            for (int y = r.y; y < r.y + r.h; y++) {
-                blend_px(k, xl, y, COL_BABYBLUE, cov);
-                if (xr != xl) blend_px(k, xr, y, COL_BABYBLUE, cov);
-            }
-        }
-    }
-    int core_x = slug_x + bands * band_w;
-    int core_w = slug_w - 2 * bands * band_w;
-    if (core_w > 0) fill_rect(k, core_x, r.y, core_w, r.h, COL_BABYBLUE);
+    /* Continuous wrap: think of an infinite chain of slugs spaced one
+     * track-width apart, scrolling rightward. As one slug's head exits
+     * the right edge, the next slug's tail enters from the left, with
+     * no visible gap. `pos` wrapping 1→0 is invisible because both ends
+     * of the cycle produce identical pixels (the chain is periodic). */
+    int period = r.w;
+    int slug_x = r.x + (int)((float)period * pos) - slug_w / 2;
+
+    /* Draw the primary slug plus its two neighbors in the chain, all
+     * clipped to the track. At any pos, at most two of these three are
+     * partially visible — the third lies entirely off-track. */
+    draw_slug(k, slug_x,          slug_w, r.y, r.h, r.x, r.x + r.w);
+    draw_slug(k, slug_x - period, slug_w, r.y, r.h, r.x, r.x + r.w);
+    draw_slug(k, slug_x + period, slug_w, r.y, r.h, r.x, r.x + r.w);
 }
 
 /* ------------------------------------------------------------------ */
