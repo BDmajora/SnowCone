@@ -281,9 +281,11 @@ static int kms_set_crtc(kms_t *k) {
 }
 
 static void kms_close(kms_t *k) {
-    if (k->saved_crtc_valid) {
-        ioctl(k->fd, DRM_IOCTL_MODE_SETCRTC, &k->saved_crtc);
-    }
+    /* Do NOT restore the saved CRTC. On a boot splash there's nothing
+     * useful to restore to (the saved state is typically fb_id=0 /
+     * mode_valid=0 from before we started), and restoring it blanks
+     * the display in a way that confuses the next DRM master (snowfall).
+     * Just tear down our resources and close the fd. */
     if (k->pixels) munmap(k->pixels, k->size);
     if (k->fb_id) {
         ioctl(k->fd, DRM_IOCTL_MODE_RMFB, &k->fb_id);
