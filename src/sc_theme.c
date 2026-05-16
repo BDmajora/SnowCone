@@ -49,27 +49,66 @@ xform_t sc_make_xform(const kms_t *k) {
 
 /* ------------------------------------------------------------------ */
 /* Logo / icon                                                        */
+/*                                                                    */
+/* Geometry is defined in design space and then transformed through a */
+/* per-icon rotate+squish before being mapped to pixels by dp(). To   */
+/* tweak shape: adjust ICON_SQUISH (1.0 = original width, <1 skinnier)*/
+/* and ICON_TILT_DEG (negative = counter-clockwise lean).             */
 /* ------------------------------------------------------------------ */
 
+#define ICON_PIVOT_X     510.0f
+#define ICON_PIVOT_Y     340.0f
+#define ICON_SQUISH      0.55f          /* horizontal scale around pivot */
+#define ICON_TILT_DEG   -8.0f           /* rotation around pivot (deg)   */
+
+/* Small sin/cos approximation good enough for a fixed tilt — Taylor
+ * series around 0 in radians. The angle here is small (~8°) so a few
+ * terms give more than enough precision and we avoid pulling in libm. */
+static float icon_sin(float r) {
+    float r2 = r * r;
+    return r * (1.0f - r2 * (1.0f / 6.0f - r2 * (1.0f / 120.0f)));
+}
+static float icon_cos(float r) {
+    float r2 = r * r;
+    return 1.0f - r2 * (0.5f - r2 * (1.0f / 24.0f - r2 * (1.0f / 720.0f)));
+}
+
+/* Apply per-icon squish + rotation in design space, then map to pixels. */
+static pt_t ip(const xform_t *x, float dx, float dy) {
+    static int   inited = 0;
+    static float ca, sa;
+    if (!inited) {
+        float rad = ICON_TILT_DEG * 3.14159265f / 180.0f;
+        ca = icon_cos(rad);
+        sa = icon_sin(rad);
+        inited = 1;
+    }
+    float lx = (dx - ICON_PIVOT_X) * ICON_SQUISH;
+    float ly = (dy - ICON_PIVOT_Y);
+    float rx = ICON_PIVOT_X + lx * ca - ly * sa;
+    float ry = ICON_PIVOT_Y + lx * sa + ly * ca;
+    return dp(x, rx, ry);
+}
+
 static void draw_icon(kms_t *k, const xform_t *x) {
-    /* Snowcone icon: ~200×260 design units, centered at x=512.
+    /* Skinny snowcone, narrowed by ICON_SQUISH and tilted by ICON_TILT_DEG.
      * Three layers drawn back to front with comic-book outlines. */
     float ot = 3.5f * x->scale;
     if (ot < 2.0f) ot = 2.0f;
 
-    /* 1. Cone (inverted triangle). */
+    /* 1. Cone (inverted triangle), lengthened apex for sleek silhouette. */
     pt_t cone[3] = {
-        dp(x, 412, 320),
-        dp(x, 612, 320),
-        dp(x, 512, 470),
+        ip(x, 450, 320),
+        ip(x, 570, 320),
+        ip(x, 510, 490),
     };
     fill_polygon(k, cone, 3, COL_BABYBLUE);
 
     /* Darker right wedge for volume. */
     pt_t cone_shadow[3] = {
-        dp(x, 512, 320),
-        dp(x, 612, 320),
-        dp(x, 512, 470),
+        ip(x, 510, 320),
+        ip(x, 570, 320),
+        ip(x, 510, 490),
     };
     fill_polygon(k, cone_shadow, 3, COL_DIM_BLUE);
 
@@ -79,44 +118,45 @@ static void draw_icon(kms_t *k, const xform_t *x) {
         draw_thick_line(k, a.x, a.y, b.x, b.y, ot, COL_OUTLINE);
     }
 
-    /* 2. Snow scoop with bumpy top. */
+    /* 2. Snow scoop with bumpy top. Same 18-vertex profile as before —
+     * ICON_SQUISH narrows it to match the slimmer cone. */
     pt_t snow[18];
     int n = 0;
-    snow[n++] = dp(x, 612, 320);
-    snow[n++] = dp(x, 600, 332);
-    snow[n++] = dp(x, 560, 336);
-    snow[n++] = dp(x, 512, 338);
-    snow[n++] = dp(x, 464, 336);
-    snow[n++] = dp(x, 424, 332);
-    snow[n++] = dp(x, 412, 320);
-    snow[n++] = dp(x, 400, 296);
-    snow[n++] = dp(x, 402, 264);
-    snow[n++] = dp(x, 422, 232);
-    snow[n++] = dp(x, 458, 208);
-    snow[n++] = dp(x, 488, 196);
-    snow[n++] = dp(x, 510, 204);
-    snow[n++] = dp(x, 540, 192);
-    snow[n++] = dp(x, 576, 200);
-    snow[n++] = dp(x, 604, 228);
-    snow[n++] = dp(x, 616, 268);
-    snow[n++] = dp(x, 618, 304);
+    snow[n++] = ip(x, 612, 320);
+    snow[n++] = ip(x, 600, 332);
+    snow[n++] = ip(x, 560, 336);
+    snow[n++] = ip(x, 512, 338);
+    snow[n++] = ip(x, 464, 336);
+    snow[n++] = ip(x, 424, 332);
+    snow[n++] = ip(x, 412, 320);
+    snow[n++] = ip(x, 400, 296);
+    snow[n++] = ip(x, 402, 264);
+    snow[n++] = ip(x, 422, 232);
+    snow[n++] = ip(x, 458, 208);
+    snow[n++] = ip(x, 488, 196);
+    snow[n++] = ip(x, 510, 204);
+    snow[n++] = ip(x, 540, 192);
+    snow[n++] = ip(x, 576, 200);
+    snow[n++] = ip(x, 604, 228);
+    snow[n++] = ip(x, 616, 268);
+    snow[n++] = ip(x, 618, 304);
     fill_and_outline(k, snow, n, COL_WHITE, COL_OUTLINE, ot);
 
     /* 3. Ice shard accent. */
     pt_t shard[5] = {
-        dp(x, 478, 244),
-        dp(x, 506, 252),
-        dp(x, 514, 282),
-        dp(x, 494, 304),
-        dp(x, 470, 280),
+        ip(x, 478, 244),
+        ip(x, 506, 252),
+        ip(x, 514, 282),
+        ip(x, 494, 304),
+        ip(x, 470, 280),
     };
     fill_and_outline(k, shard, 5, COL_BABYBLUE, COL_OUTLINE, ot * 0.75f);
 
     /* Tiny white highlight on the shard. */
     pt_t glint[3] = {
-        dp(x, 484, 252),
-        dp(x, 496, 256),
-        dp(x, 486, 270),
+        ip(x, 484, 252),
+        ip(x, 496, 256),
+        ip(x, 486, 270),
     };
     fill_polygon(k, glint, 3, COL_WHITE);
 }
