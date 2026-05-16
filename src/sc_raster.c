@@ -77,11 +77,14 @@ void fill_polygon(kms_t *k, const pt_t *v, int n, uint32_t color) {
             for (int sx = 0; sx < 2; sx++) {
                 for (int px = ix0; px < ix1; px++) {
                     float sampX = (float)px + subox[sx];
-                    int inside = 0;
+                    /* Even-odd rule: count how many crossings lie to the
+                     * left of sampX. Odd count = inside. */
+                    int crossings = 0;
                     for (int j = 0; j < nx; j++) {
-                        if (sampX < xs[j]) { inside = j & 1 ? 0 : 1; break; }
+                        if (xs[j] < sampX) crossings++;
+                        else break; /* xs is sorted ascending */
                     }
-                    if (inside) cov_buf[px - ix0]++;
+                    if (crossings & 1) cov_buf[px - ix0]++;
                 }
             }
         }
