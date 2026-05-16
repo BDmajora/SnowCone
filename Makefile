@@ -5,15 +5,20 @@ CC      ?= gcc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter -std=gnu11
 LDFLAGS ?=
 
-BIN := snowcone
+BIN     := snowcone
+SRCS    := main.c src/sc_kms.c src/sc_raster.c src/sc_font.c src/sc_theme.c
+OBJS    := $(SRCS:.c=.o)
 
 all: $(BIN)
 
-$(BIN): snowcone.c
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+$(BIN): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -Iinclude -c $< -o $@
 
 clean:
-	rm -f $(BIN)
+	rm -f $(BIN) $(OBJS)
 
 install: $(BIN)
 	install -d $(DESTDIR)/usr/sbin
