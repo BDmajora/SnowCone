@@ -153,7 +153,7 @@ static void draw_copyright_text(kms_t *k, const xform_t *x) {
     float by = x->oy + (768.0f - 80.0f) * x->scale - line_h;
 
     sc_draw_text(k, bx, by,           scale, thick, COL_COPY, "Copyright (C) 2026");
-    sc_draw_text(k, bx, by + line_h,  scale, thick, COL_COPY, "YetiOS Project - GNU GPL v3.0");
+    sc_draw_text(k, bx, by + line_h,  scale, thick, COL_COPY, "YetiOS Project - MIT License");
 }
 
 #define MARQUEE_X_DESIGN   412.0f
