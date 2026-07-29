@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # PROVIDE: yetios_snowcone
-# REQUIRE: root
-# BEFORE: FILESYSTEMS
+# REQUIRE: FILESYSTEMS
+# BEFORE: NETWORKING DAEMON LOGIN
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
@@ -18,14 +18,27 @@ start_cmd="${name}_start"
 stop_cmd="${name}_stop"
 status_cmd="${name}_status"
 
+snowcone_build="/usr/libexec/yetios/snowcone-build"
+snowcone_bin="/tmp/yetios-snowcone/snowcone"
+snowcone_fallback="/usr/libexec/yetios/snowcone"
+
 yetios_snowcone_start()
 {
     if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" >/dev/null 2>&1; then
         return 0
     fi
 
-    /usr/local/sbin/snowcone-build >/dev/null 2>&1 || return 1
-    /usr/local/sbin/snowcone >/dev/null 2>&1 &
+    if [ ! -x "$snowcone_bin" ] && [ -x "$snowcone_build" ]; then
+        "$snowcone_build" >/dev/null 2>&1 || true
+    fi
+
+    if [ -x "$snowcone_bin" ]; then
+        "$snowcone_bin" >/dev/null 2>&1 &
+    elif [ -x "$snowcone_fallback" ]; then
+        "$snowcone_fallback" >/dev/null 2>&1 &
+    else
+        return 1
+    fi
     echo $! > "$pidfile"
 }
 

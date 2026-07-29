@@ -35,8 +35,8 @@ $(FREEBSD_BIN): $(FREEBSD_SRCS)
 	$(CC) $(CFLAGS) -DSNOWCONE_BACKEND_FREEBSD -Iinclude -o $@ $(FREEBSD_SRCS) $(LDFLAGS)
 
 install-freebsd: $(FREEBSD_BIN)
-	install -d $(DESTDIR)/usr/local/sbin
-	install -m 0755 $(FREEBSD_BIN) $(DESTDIR)/usr/local/sbin/snowcone
+	install -d $(DESTDIR)/usr/libexec/yetios
+	install -m 0755 $(FREEBSD_BIN) $(DESTDIR)/usr/libexec/yetios/snowcone
 	install -d $(DESTDIR)/etc/rc.d
 	install -m 0755 snowcone.freebsd.rc $(DESTDIR)/etc/rc.d/yetios_snowcone
 	install -m 0755 snowcone.freebsd-handoff.rc $(DESTDIR)/etc/rc.d/yetios_snowcone_handoff

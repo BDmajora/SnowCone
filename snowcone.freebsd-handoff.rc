@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # PROVIDE: yetios_snowcone_handoff
-# REQUIRE: DAEMON
+# REQUIRE: DAEMON local
 # BEFORE: LOGIN
 # KEYWORD: nojail
 
