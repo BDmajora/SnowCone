@@ -8,42 +8,65 @@
 
 #ifdef SNOWCONE_BACKEND_FREEBSD
 
-#include <string.h>
-#include <sys/consio.h>
-#include <sys/ioctl.h>
+#define BUILTIN_FONT_ROWS 7
 
-static unsigned char g_font[256][16];
-static int g_font_state = 0;
+typedef struct {
+    char c;
+    int width;
+    const char *row[BUILTIN_FONT_ROWS];
+} bitmap_glyph_t;
 
-static int
-load_console_font(kms_t *k)
+#define GLYPH(ch, w, r0, r1, r2, r3, r4, r5, r6) \
+    { ch, w, { r0, r1, r2, r3, r4, r5, r6 } }
+
+static const bitmap_glyph_t BUILTIN_FONT[] = {
+    GLYPH('C', 5, "01111", "10000", "10000", "10000", "10000", "10000", "01111"),
+    GLYPH('I', 3, "111",   "010",   "010",   "010",   "010",   "010",   "111"),
+    GLYPH('L', 5, "10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    GLYPH('M', 5, "10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    GLYPH('O', 5, "01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    GLYPH('P', 5, "11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    GLYPH('S', 5, "01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    GLYPH('T', 5, "11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    GLYPH('Y', 5, "10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    GLYPH('c', 5, "00000", "00000", "01110", "10000", "10000", "10000", "01110"),
+    GLYPH('e', 5, "00000", "00000", "01110", "10001", "11110", "10000", "01111"),
+    GLYPH('g', 5, "00000", "01110", "10001", "10001", "01111", "00001", "11110"),
+    GLYPH('h', 5, "10000", "10000", "11110", "10001", "10001", "10001", "10001"),
+    GLYPH('i', 1, "1",     "0",     "1",     "1",     "1",     "1",     "1"),
+    GLYPH('j', 3, "001",   "000",   "001",   "001",   "001",   "101",   "010"),
+    GLYPH('n', 5, "00000", "00000", "11110", "10001", "10001", "10001", "10001"),
+    GLYPH('o', 5, "00000", "00000", "01110", "10001", "10001", "10001", "01110"),
+    GLYPH('p', 5, "00000", "11110", "10001", "10001", "11110", "10000", "10000"),
+    GLYPH('r', 5, "00000", "00000", "10110", "11001", "10000", "10000", "10000"),
+    GLYPH('s', 5, "00000", "00000", "01111", "10000", "01110", "00001", "11110"),
+    GLYPH('t', 5, "01000", "01000", "11100", "01000", "01000", "01001", "00110"),
+    GLYPH('y', 5, "00000", "00000", "10001", "10001", "01111", "00001", "11110"),
+    GLYPH('0', 5, "01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+    GLYPH('2', 5, "01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+    GLYPH('6', 5, "00110", "01000", "10000", "11110", "10001", "10001", "01110"),
+    GLYPH('-', 5, "00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    GLYPH('(', 2, "01",    "10",    "10",    "10",    "10",    "10",    "01"),
+    GLYPH(')', 2, "10",    "01",    "01",    "01",    "01",    "01",    "10"),
+};
+
+#define BUILTIN_FONT_COUNT (sizeof(BUILTIN_FONT) / sizeof(BUILTIN_FONT[0]))
+
+static const bitmap_glyph_t *
+find_bitmap_glyph(char c)
 {
-    struct fnt16 font;
-
-    if (g_font_state != 0)
-        return g_font_state > 0;
-
-    memset(&font, 0, sizeof(font));
-    if (k->tty_fd >= 0 && ioctl(k->tty_fd, GIO_FONT8x16, &font) == 0) {
-        memcpy(g_font, font.fnt8x16, sizeof(g_font));
-        g_font_state = 1;
-        return 1;
+    for (size_t i = 0; i < BUILTIN_FONT_COUNT; i++) {
+        if (BUILTIN_FONT[i].c == c)
+            return &BUILTIN_FONT[i];
     }
-
-    g_font_state = -1;
-    return 0;
+    return NULL;
 }
 
-static void
-draw_fallback_box(kms_t *k, int x, int y, int pixel, uint32_t color)
+static int
+font_pixel_size(float scale)
 {
-    int w = pixel * 6;
-    int h = pixel * 10;
-
-    fill_rect(k, x, y, w, pixel, color);
-    fill_rect(k, x, y + h - pixel, w, pixel, color);
-    fill_rect(k, x, y, pixel, h, color);
-    fill_rect(k, x + w - pixel, y, pixel, h, color);
+    int pixel = (int)(scale * 1.6f + 0.5f);
+    return pixel < 1 ? 1 : pixel;
 }
 
 float
@@ -51,46 +74,36 @@ sc_draw_text(kms_t *k, float x, float y, float scale, float thickness,
              uint32_t color, const char *s)
 {
     float pen_x = x;
-    int pixel = (int)(scale + 0.5f);
-    int draw_w;
-    int draw_h;
+    int pixel = font_pixel_size(scale);
 
     (void)thickness;
-    if (pixel < 1)
-        pixel = 1;
-    draw_w = pixel + 1;
-    draw_h = pixel + 1;
-
-    if (!load_console_font(k)) {
-        for (; *s; s++) {
-            if (*s != ' ')
-                draw_fallback_box(k, (int)pen_x, (int)y, pixel, color);
-            pen_x += (*s == ' ' ? 4.0f : 8.0f) * scale;
-        }
-        return pen_x - x;
-    }
 
     for (; *s; s++) {
-        unsigned char ch = (unsigned char)*s;
+        const bitmap_glyph_t *g;
 
-        if (ch == ' ') {
-            pen_x += 4.0f * scale;
+        if (*s == ' ') {
+            pen_x += 4.0f * (float)pixel;
             continue;
         }
 
-        for (int row = 0; row < 16; row++) {
-            unsigned char bits = g_font[ch][row];
-            for (int col = 0; col < 8; col++) {
-                if ((bits & (0x80u >> col)) != 0) {
+        g = find_bitmap_glyph(*s);
+        if (g == NULL) {
+            pen_x += 4.0f * (float)pixel;
+            continue;
+        }
+
+        for (int row = 0; row < BUILTIN_FONT_ROWS; row++) {
+            for (int col = 0; col < g->width; col++) {
+                if (g->row[row][col] == '1') {
                     fill_rect(k,
-                              (int)(pen_x + (float)col * scale),
-                              (int)(y + (float)row * scale),
-                              draw_w, draw_h, color);
+                              (int)(pen_x + (float)(col * pixel)),
+                              (int)(y + (float)(row * pixel)),
+                              pixel, pixel, color);
                 }
             }
         }
 
-        pen_x += 9.0f * scale;
+        pen_x += (float)((g->width + 1) * pixel);
     }
 
     return pen_x - x;
@@ -100,9 +113,19 @@ float
 sc_text_width(float scale, const char *s)
 {
     float w = 0.0f;
+    int pixel = font_pixel_size(scale);
 
-    for (; *s; s++)
-        w += (*s == ' ' ? 4.0f : 9.0f) * scale;
+    for (; *s; s++) {
+        const bitmap_glyph_t *g;
+
+        if (*s == ' ') {
+            w += 4.0f * (float)pixel;
+            continue;
+        }
+
+        g = find_bitmap_glyph(*s);
+        w += (float)(((g == NULL ? 3 : g->width) + 1) * pixel);
+    }
 
     return w;
 }

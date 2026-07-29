@@ -16,8 +16,9 @@ etc/rc.d/yetios_snowcone_handoff stops SnowCone before LOGIN
 ```
 
 YetiOS also installs a loader-stage bitmap so the handoff into FreeBSD starts
-with YetiOS artwork before the live renderer takes over. The broken text
-fallback is not SnowCone and is not installed.
+with YetiOS artwork before the live renderer takes over. The FreeBSD renderer
+uses a built-in readable bitmap font for boot text. The broken text fallback is
+not SnowCone and is not installed.
 
 ## License
 
