@@ -26,10 +26,12 @@ xform_t sc_make_xform(const kms_t *k) {
     return x;
 }
 
-// Tweak ICON_SQUISH (<1 = skinnier) and ICON_TILT_DEG to reshape the logo.
+// Tweak these in 1024x768 design space to keep the logo XP-style and centered.
 #define ICON_PIVOT_X    512.0f
 #define ICON_PIVOT_Y    340.0f
 #define ICON_SQUISH     0.72f
+#define ICON_Y_SCALE    0.78f
+#define ICON_OFFSET_Y  -65.0f
 #define ICON_TILT_DEG   0.0f
 
 // Taylor series sin/cos for small angles; avoids libm.
@@ -53,9 +55,9 @@ static pt_t ip(const xform_t *x, float dx, float dy) {
         inited = 1;
     }
     float lx = (dx - ICON_PIVOT_X) * ICON_SQUISH;
-    float ly = (dy - ICON_PIVOT_Y);
+    float ly = (dy - ICON_PIVOT_Y) * ICON_Y_SCALE;
     float rx = ICON_PIVOT_X + lx * ca - ly * sa;
-    float ry = ICON_PIVOT_Y + lx * sa + ly * ca;
+    float ry = ICON_PIVOT_Y + lx * sa + ly * ca + ICON_OFFSET_Y;
     return dp(x, rx, ry);
 }
 
@@ -133,7 +135,7 @@ static void draw_wordmark(kms_t *k, const xform_t *x) {
     if (thick < 1.5f) thick = 1.5f;
 
     float total = sc_text_width(text_scale, part_a) + sc_text_width(text_scale, part_b);
-    float pen_y = x->oy + 470.0f * x->scale;
+    float pen_y = x->oy + 410.0f * x->scale;
     float pen_x = ((float)k->mode.hdisplay - total) * 0.5f;
 
     pen_x += sc_draw_text(k, pen_x, pen_y, text_scale, thick, COL_WHITE, part_a);
@@ -157,7 +159,7 @@ static void draw_copyright_text(kms_t *k, const xform_t *x) {
 }
 
 #define MARQUEE_X_DESIGN   412.0f
-#define MARQUEE_Y_DESIGN   560.0f
+#define MARQUEE_Y_DESIGN   575.0f
 #define MARQUEE_W_DESIGN   200.0f
 #define MARQUEE_H_DESIGN    14.0f
 
@@ -181,7 +183,7 @@ static void draw_marquee_track(kms_t *k, const xform_t *x) {
     fill_rect(k, r.x, r.y, r.w, r.h,              COL_BLACK);
 }
 
-// Draws one slug at slug_x, clipped to [clip_x0, clip_x1).
+// Draws one soft-edged slug at slug_x, clipped to [clip_x0, clip_x1).
 static void draw_slug(kms_t *k, int slug_x, int slug_w,
                       int track_y, int track_h,
                       int clip_x0, int clip_x1) {
@@ -214,9 +216,8 @@ static void draw_slug(kms_t *k, int slug_x, int slug_w,
     }
 }
 
-// Draws one animation frame. pos is 0.0–1.0 and wraps seamlessly.
-// The slug is part of an infinite periodic chain spaced one track-width apart;
-// drawing three neighbors ensures the wrap boundary is always covered.
+// Draws one animation frame. pos is 0.0-1.0 and wraps seamlessly.
+// The slug is part of an infinite periodic chain spaced one track-width apart.
 void sc_draw_marquee_frame(kms_t *k, const xform_t *x, float pos) {
     rect_t r = sc_marquee_rect(x);
     fill_rect(k, r.x, r.y, r.w, r.h, COL_BLACK);

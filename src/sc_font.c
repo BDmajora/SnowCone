@@ -65,7 +65,7 @@ find_bitmap_glyph(char c)
 static int
 font_pixel_size(float scale)
 {
-    int pixel = (int)(scale * 1.6f + 0.5f);
+    int pixel = (int)(scale * 2.0f + 0.5f);
     return pixel < 1 ? 1 : pixel;
 }
 
