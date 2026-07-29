@@ -1,8 +1,8 @@
 #!/bin/sh
 #
 # PROVIDE: yetios_snowcone
-# REQUIRE: FILESYSTEMS
-# BEFORE: LOGIN
+# REQUIRE: root
+# BEFORE: FILESYSTEMS
 # KEYWORD: nojail shutdown
 
 . /etc/rc.subr
