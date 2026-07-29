@@ -31,9 +31,16 @@ yetios_snowcone_start()
 yetios_snowcone_stop()
 {
     if [ -f "$pidfile" ]; then
-        kill -TERM "$(cat "$pidfile")" >/dev/null 2>&1 || true
+        pid="$(cat "$pidfile")"
+        kill -TERM "$pid" >/dev/null 2>&1 || true
+        i=0
+        while kill -0 "$pid" >/dev/null 2>&1 && [ "$i" -lt 2 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
         rm -f "$pidfile"
     fi
+    printf '\033[H\033[2J\033[3J' >/dev/ttyv0 2>/dev/null || true
 }
 
 yetios_snowcone_status()

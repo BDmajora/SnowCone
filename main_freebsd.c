@@ -93,8 +93,9 @@ main(int argc, char **argv)
         double phase = t - (long)(t / period) * period;
         float pos = (float)(phase / period);
 
+        sc_draw_static(&k, &xf);
         sc_draw_marquee_frame(&k, &xf, pos);
-        kms_dirty(&k, sc_marquee_rect(&xf));
+        kms_dirty(&k, (rect_t){0, 0, (int)k.mode.hdisplay, (int)k.mode.vdisplay});
         sleep_frame(frame_ns);
     }
 

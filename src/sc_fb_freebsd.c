@@ -286,6 +286,8 @@ kms_dirty(kms_t *k, rect_t r)
 void
 kms_close(kms_t *k)
 {
+    static const char clear_screen[] = "\033[H\033[2J\033[3J";
+
     if (k->front != NULL && k->front != MAP_FAILED)
         munmap(k->front, (size_t)k->front_size);
     if (k->pixels != NULL)
@@ -295,6 +297,7 @@ kms_close(kms_t *k)
     if (k->tty_fd >= 0) {
         int mode = k->old_kd_mode >= 0 ? k->old_kd_mode : KD_TEXT;
         (void)ioctl(k->tty_fd, KDSETMODE, mode);
+        (void)write(k->tty_fd, clear_screen, sizeof(clear_screen) - 1);
         close(k->tty_fd);
     }
 }
