@@ -10,6 +10,34 @@
 #define SC_KMS_H
 
 #include <stdint.h>
+
+#ifdef SNOWCONE_BACKEND_FREEBSD
+
+typedef struct {
+    uint32_t hdisplay;
+    uint32_t vdisplay;
+    uint32_t vrefresh;
+} sc_mode_t;
+
+typedef struct {
+    int      fd;
+    int      tty_fd;
+    int      old_kd_mode;
+    sc_mode_t mode;
+    uint32_t pitch;         /* bytes per scanline in the ARGB backbuffer */
+    uint64_t size;          /* total backbuffer size */
+    uint32_t *pixels;       /* ARGB8888 backbuffer drawn by SnowCone */
+    void     *front;        /* mmap'd FreeBSD framebuffer */
+    uint32_t front_pitch;   /* bytes per scanline in the real framebuffer */
+    uint64_t front_size;    /* total real framebuffer mmap size */
+    int      front_depth;   /* bits per pixel in the real framebuffer */
+    int      red_shift;
+    int      green_shift;
+    int      blue_shift;
+} kms_t;
+
+#else
+
 #include <drm/drm_mode.h>
 
 typedef struct {
@@ -24,6 +52,8 @@ typedef struct {
     uint64_t size;          /* total mmap size    */
     uint32_t *pixels;       /* mmap'd ARGB8888 framebuffer */
 } kms_t;
+
+#endif
 
 /* Dirty rectangle for partial display updates. */
 typedef struct { int x, y, w, h; } rect_t;

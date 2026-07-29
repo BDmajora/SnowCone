@@ -1,0 +1,50 @@
+#!/bin/sh
+
+# PROVIDE: yetios_snowcone
+# REQUIRE: root
+# BEFORE: FILESYSTEMS
+# KEYWORD: nojail shutdown
+
+. /etc/rc.subr
+
+name="yetios_snowcone"
+rcvar="yetios_snowcone_enable"
+pidfile="/var/run/${name}.pid"
+
+load_rc_config "$name"
+: ${yetios_snowcone_enable:="NO"}
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+yetios_snowcone_start()
+{
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    /usr/local/sbin/snowcone-build >/dev/null 2>&1 || return 1
+    /usr/sbin/daemon -p "$pidfile" /usr/local/sbin/snowcone >/dev/null 2>&1
+}
+
+yetios_snowcone_stop()
+{
+    if [ -f "$pidfile" ]; then
+        kill -TERM "$(cat "$pidfile")" >/dev/null 2>&1 || true
+        rm -f "$pidfile"
+    fi
+}
+
+yetios_snowcone_status()
+{
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" >/dev/null 2>&1; then
+        echo "${name} is running as $(cat "$pidfile")."
+        return 0
+    fi
+
+    echo "${name} is not running."
+    return 1
+}
+
+run_rc_command "$1"

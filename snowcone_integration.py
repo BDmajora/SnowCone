@@ -15,6 +15,10 @@ class SplashFiles:
     binary_dst:       str  # absolute path inside the target rootfs
     openrc_src:       str  # OpenRC init file in the cloned repo
     openrc_dst:       str  # absolute path inside the target rootfs
+    freebsd_binary_src: str  # FreeBSD built artifact in the cloned repo
+    freebsd_binary_dst: str  # absolute path inside the FreeBSD target rootfs
+    freebsd_rc_src:     str  # FreeBSD rc.d script in the cloned repo
+    freebsd_rc_dst:     str  # absolute path inside the FreeBSD target rootfs
 
 
 # Paths are relative to the root of the cloned snowcone repo.
@@ -23,6 +27,10 @@ FILES = SplashFiles(
     binary_dst = "/usr/sbin/snowcone",
     openrc_src = "snowcone.openrc",
     openrc_dst = "/etc/init.d/snowcone",
+    freebsd_binary_src = "snowcone-freebsd",
+    freebsd_binary_dst = "/usr/local/sbin/snowcone",
+    freebsd_rc_src = "snowcone.freebsd.rc",
+    freebsd_rc_dst = "/etc/rc.d/yetios_snowcone",
 )
 
 
