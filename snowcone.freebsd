@@ -1,0 +1,72 @@
+#!/bin/sh
+# SnowCone FreeBSD alpha text backend.
+#
+# This is a base-system-safe bridge while the real SnowCone DRM/KMS renderer is
+# ported to FreeBSD. It keeps a YetiOS loading screen alive on ttyv0, then exits
+# cleanly when the YetiOS boot scripts stop it before login.
+
+set -u
+
+TTY="${SNOWCONE_TTY:-/dev/ttyv0}"
+if [ ! -w "$TTY" ]; then
+    TTY="/dev/console"
+fi
+if [ ! -w "$TTY" ]; then
+    exit 0
+fi
+
+FRAME=0
+
+cleanup() {
+    trap - INT TERM HUP USR1 EXIT
+    printf '\033[0m\033[?25h\033[2J\033[H' > "$TTY"
+    exit 0
+}
+
+trap cleanup INT TERM HUP USR1 EXIT
+
+spinner() {
+    case $((FRAME % 4)) in
+        0) printf '|' ;;
+        1) printf '/' ;;
+        2) printf '-' ;;
+        *) printf '\\' ;;
+    esac
+}
+
+bar() {
+    fill=$((FRAME % 25))
+    i=0
+    printf '['
+    while [ "$i" -lt 24 ]; do
+        if [ "$i" -lt "$fill" ]; then
+            printf '#'
+        else
+            printf ' '
+        fi
+        i=$((i + 1))
+    done
+    printf ']'
+}
+
+draw() {
+    {
+        printf '\033[2J\033[H\033[?25l'
+        printf '\n\n\n'
+        printf '                       YetiOS\n'
+        printf '                  FreeBSD alpha\n\n'
+        printf '             '
+        bar
+        printf '  '
+        spinner
+        printf '\n\n'
+        printf '              Loading the YetiOS core...\n'
+        printf '              SnowCone text backend active\n'
+    } > "$TTY"
+}
+
+while :; do
+    draw
+    FRAME=$((FRAME + 1))
+    sleep 1
+done

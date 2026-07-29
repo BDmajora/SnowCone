@@ -1,5 +1,6 @@
 # snowcone — from-scratch boot splash for YetiOS.
-# No library deps: just libc and Linux kernel DRM headers.
+# The current C renderer uses libc plus Linux kernel DRM headers.
+# The FreeBSD alpha backend is a base-system /bin/sh text splash.
 
 CC      ?= gcc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter -std=gnu11
@@ -26,4 +27,10 @@ install: $(BIN)
 	install -d $(DESTDIR)/etc/init.d
 	install -m 0755 snowcone.openrc $(DESTDIR)/etc/init.d/snowcone
 
-.PHONY: all clean install
+install-freebsd:
+	install -d $(DESTDIR)/usr/local/sbin
+	install -m 0755 snowcone.freebsd $(DESTDIR)/usr/local/sbin/snowcone
+	install -d $(DESTDIR)/etc/rc.d
+	install -m 0755 snowcone.freebsd.rc $(DESTDIR)/etc/rc.d/yetios_snowcone
+
+.PHONY: all clean install install-freebsd

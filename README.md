@@ -1,5 +1,21 @@
 # SnowCone
-A small splash screen program to mimic the look of the classic XP era splash screen.
+
+SnowCone is the YetiOS boot/loading screen.
+
+The original renderer in `main.c` uses Linux DRM/KMS directly. For the current
+FreeBSD-based YetiOS alpha, SnowCone also ships a base-system-safe text backend:
+
+```text
+snowcone.freebsd       FreeBSD `/bin/sh` text loading screen
+snowcone.freebsd.rc    FreeBSD rc.d service wrapper
+```
+
+YetiOS installs that backend as `/usr/local/sbin/snowcone` and starts it with
+`/etc/rc.d/yetios_snowcone`. The splash is stopped at the end of boot so the
+system lands on the normal terminal login.
+
+The next real SnowCone porting step is replacing the text backend with a native
+FreeBSD graphics backend.
 
 ## License
 
