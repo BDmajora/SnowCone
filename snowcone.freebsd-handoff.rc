@@ -21,6 +21,7 @@ yetios_snowcone_handoff_start()
     if [ -x /etc/rc.d/yetios_snowcone ]; then
         /etc/rc.d/yetios_snowcone onestop >/dev/null 2>&1 || true
     fi
+    sysctl kern.consmute=0 >/dev/null 2>&1 || true
     printf '\033[H\033[2J\033[3J' >/dev/ttyv0 2>/dev/null || true
 }
 
