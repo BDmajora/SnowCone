@@ -19,6 +19,8 @@ class SplashFiles:
     freebsd_binary_dst: str  # absolute path inside the FreeBSD target rootfs
     freebsd_rc_src:     str  # FreeBSD rc.d script in the cloned repo
     freebsd_rc_dst:     str  # absolute path inside the FreeBSD target rootfs
+    freebsd_handoff_src: str  # FreeBSD rc.d handoff script
+    freebsd_handoff_dst: str  # absolute path inside the FreeBSD target rootfs
 
 
 # Paths are relative to the root of the cloned snowcone repo.
@@ -31,6 +33,8 @@ FILES = SplashFiles(
     freebsd_binary_dst = "/usr/local/sbin/snowcone",
     freebsd_rc_src = "snowcone.freebsd.rc",
     freebsd_rc_dst = "/etc/rc.d/yetios_snowcone",
+    freebsd_handoff_src = "snowcone.freebsd-handoff.rc",
+    freebsd_handoff_dst = "/etc/rc.d/yetios_snowcone_handoff",
 )
 
 

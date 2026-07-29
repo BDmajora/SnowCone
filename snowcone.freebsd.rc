@@ -25,7 +25,8 @@ yetios_snowcone_start()
     fi
 
     /usr/local/sbin/snowcone-build >/dev/null 2>&1 || return 1
-    /usr/sbin/daemon -p "$pidfile" /usr/local/sbin/snowcone >/dev/null 2>&1
+    /usr/local/sbin/snowcone >/dev/null 2>&1 &
+    echo $! > "$pidfile"
 }
 
 yetios_snowcone_stop()
@@ -38,6 +39,9 @@ yetios_snowcone_stop()
             sleep 1
             i=$((i + 1))
         done
+        if kill -0 "$pid" >/dev/null 2>&1; then
+            kill -KILL "$pid" >/dev/null 2>&1 || true
+        fi
         rm -f "$pidfile"
     fi
     printf '\033[H\033[2J\033[3J' >/dev/ttyv0 2>/dev/null || true

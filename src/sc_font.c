@@ -1,10 +1,113 @@
-// snowcone/src/sc_font.c — Hershey-style stroked vector font.
+// snowcone/src/sc_font.c - SnowCone text rendering.
 
 #include "sc_font.h"
 #include "sc_raster.h"
 
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef SNOWCONE_BACKEND_FREEBSD
+
+#include <string.h>
+#include <sys/consio.h>
+#include <sys/ioctl.h>
+
+static unsigned char g_font[256][16];
+static int g_font_state = 0;
+
+static int
+load_console_font(kms_t *k)
+{
+    struct fnt16 font;
+
+    if (g_font_state != 0)
+        return g_font_state > 0;
+
+    memset(&font, 0, sizeof(font));
+    if (k->tty_fd >= 0 && ioctl(k->tty_fd, GIO_FONT8x16, &font) == 0) {
+        memcpy(g_font, font.fnt8x16, sizeof(g_font));
+        g_font_state = 1;
+        return 1;
+    }
+
+    g_font_state = -1;
+    return 0;
+}
+
+static void
+draw_fallback_box(kms_t *k, int x, int y, int pixel, uint32_t color)
+{
+    int w = pixel * 6;
+    int h = pixel * 10;
+
+    fill_rect(k, x, y, w, pixel, color);
+    fill_rect(k, x, y + h - pixel, w, pixel, color);
+    fill_rect(k, x, y, pixel, h, color);
+    fill_rect(k, x + w - pixel, y, pixel, h, color);
+}
+
+float
+sc_draw_text(kms_t *k, float x, float y, float scale, float thickness,
+             uint32_t color, const char *s)
+{
+    float pen_x = x;
+    int pixel = (int)(scale + 0.5f);
+    int draw_w;
+    int draw_h;
+
+    (void)thickness;
+    if (pixel < 1)
+        pixel = 1;
+    draw_w = pixel + 1;
+    draw_h = pixel + 1;
+
+    if (!load_console_font(k)) {
+        for (; *s; s++) {
+            if (*s != ' ')
+                draw_fallback_box(k, (int)pen_x, (int)y, pixel, color);
+            pen_x += (*s == ' ' ? 4.0f : 8.0f) * scale;
+        }
+        return pen_x - x;
+    }
+
+    for (; *s; s++) {
+        unsigned char ch = (unsigned char)*s;
+
+        if (ch == ' ') {
+            pen_x += 4.0f * scale;
+            continue;
+        }
+
+        for (int row = 0; row < 16; row++) {
+            unsigned char bits = g_font[ch][row];
+            for (int col = 0; col < 8; col++) {
+                if ((bits & (0x80u >> col)) != 0) {
+                    fill_rect(k,
+                              (int)(pen_x + (float)col * scale),
+                              (int)(y + (float)row * scale),
+                              draw_w, draw_h, color);
+                }
+            }
+        }
+
+        pen_x += 9.0f * scale;
+    }
+
+    return pen_x - x;
+}
+
+float
+sc_text_width(float scale, const char *s)
+{
+    float w = 0.0f;
+
+    for (; *s; s++)
+        w += (*s == ' ' ? 4.0f : 9.0f) * scale;
+
+    return w;
+}
+
+#else
 
 typedef struct {
     char   c;
@@ -108,3 +211,5 @@ float sc_text_width(float scale, const char *s) {
     }
     return w;
 }
+
+#endif

@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# PROVIDE: yetios_snowcone_handoff
+# REQUIRE: DAEMON
+# BEFORE: LOGIN
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="yetios_snowcone_handoff"
+rcvar="yetios_snowcone_enable"
+
+load_rc_config "$name"
+: ${yetios_snowcone_enable:="NO"}
+
+start_cmd="${name}_start"
+stop_cmd=":"
+
+yetios_snowcone_handoff_start()
+{
+    if [ -x /etc/rc.d/yetios_snowcone ]; then
+        /etc/rc.d/yetios_snowcone onestop >/dev/null 2>&1 || true
+    fi
+    printf '\033[H\033[2J\033[3J' >/dev/ttyv0 2>/dev/null || true
+}
+
+run_rc_command "$1"

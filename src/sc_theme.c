@@ -27,10 +27,10 @@ xform_t sc_make_xform(const kms_t *k) {
 }
 
 // Tweak ICON_SQUISH (<1 = skinnier) and ICON_TILT_DEG to reshape the logo.
-#define ICON_PIVOT_X    510.0f
+#define ICON_PIVOT_X    512.0f
 #define ICON_PIVOT_Y    340.0f
-#define ICON_SQUISH     0.55f
-#define ICON_TILT_DEG  -8.0f   // negative = counter-clockwise
+#define ICON_SQUISH     0.72f
+#define ICON_TILT_DEG   0.0f
 
 // Taylor series sin/cos for small angles; avoids libm.
 static float icon_sin(float r) {

@@ -39,5 +39,6 @@ install-freebsd: $(FREEBSD_BIN)
 	install -m 0755 $(FREEBSD_BIN) $(DESTDIR)/usr/local/sbin/snowcone
 	install -d $(DESTDIR)/etc/rc.d
 	install -m 0755 snowcone.freebsd.rc $(DESTDIR)/etc/rc.d/yetios_snowcone
+	install -m 0755 snowcone.freebsd-handoff.rc $(DESTDIR)/etc/rc.d/yetios_snowcone_handoff
 
 .PHONY: all clean install freebsd install-freebsd

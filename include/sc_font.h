@@ -1,6 +1,4 @@
-// snowcone/include/sc_font.h — Hershey-style stroked vector font.
-// Glyphs are (x,y) pairs in a 0–10 wide, 0–14 tall grid.
-// (-1,-1) = pen up, (99,99) = end of glyph.
+// snowcone/include/sc_font.h - SnowCone text rendering.
 
 #ifndef SC_FONT_H
 #define SC_FONT_H
